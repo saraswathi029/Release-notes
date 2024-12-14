@@ -1,0 +1,300 @@
+---
+    name: Create Release Notes
+    on:
+      pull_request:
+        types:
+          - closed
+        branches:
+          - develop
+    jobs:
+      release:
+        if: github.event.pull_request.merged == true &&
+          github.event.pull_request.base.ref == 'develop'
+        runs-on: ubuntu-latest
+        steps:
+          - name: Checkout code
+            uses: actions/checkout@v2
+            with:
+              fetch-depth: 0
+          - name: Get PR Details
+            id: pr_details
+            run: |
+              
+    
+              PR_TITLE="${{ github.event.pull_request.title }}"
+    
+    
+    
+    
+              PR_BODY="${{ github.event.pull_request.body }}"
+    
+    
+    
+    
+    
+              # Capture the labels assigned to the PR
+    
+    
+    
+    
+              PR_LABELS=$(echo '${{ toJson(github.event.pull_request.labels) }}' | jq -r '.[].name' | paste -sd ',' -) # Combine labels into a comma-separated string
+    
+    
+    
+    
+    
+              echo "PR_TITLE=$PR_TITLE" >> $GITHUB_ENV
+    
+    
+    
+    
+    
+              # Handle multi-line PR_BODY properly by writing it to a separate file and using `<<EOF` for environment variables
+    
+    
+    
+    
+              echo "PR_BODY<<EOF" >> $GITHUB_ENV
+    
+    
+    
+    
+              echo "$PR_BODY" >> $GITHUB_ENV
+    
+    
+    
+    
+              echo "EOF" >> $GITHUB_ENV
+    
+    
+    
+    
+    
+              echo "PR_LABELS=$PR_LABELS" >> $GITHUB_ENV
+          - name: Debug Output
+            run: |
+              echo "Pull Request Title: $PR_TITLE"
+              echo "Pull Request Body:"
+              echo "$PR_BODY"
+              echo "Labels: $PR_LABELS"
+          - name: Get Latest Tag
+            id: get_latest_tag
+            run: |
+              LATEST_TAG=$(git tag --sort=-v:refname | head -n 1 || echo "v0.0.0")
+              VERSION=${LATEST_TAG#v}
+              echo "Latest tag: $LATEST_TAG"
+              IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+              echo "MAJOR=$MAJOR" >> $GITHUB_ENV
+              echo "MINOR=$MINOR" >> $GITHUB_ENV
+              echo "PATCH=$PATCH" >> $GITHUB_ENV
+          - name: Increment Version
+            id: increment_version
+            run: |
+              if [[ "$PR_LABELS" == *"major"* ]]; then
+                MAJOR=$((MAJOR + 1))
+                MINOR=0
+                PATCH=0
+              elif [[ "$PR_LABELS" == *"minor"* ]]; then
+                MINOR=$((MINOR + 1))
+                PATCH=0
+              elif [[ "$PR_LABELS" == *"patch"* ]]; then
+                PATCH=$((PATCH + 1))
+              fi
+              NEW_VERSION="v$MAJOR.$MINOR.$PATCH"
+              echo "New version: $NEW_VERSION"
+              echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
+          - name: Generate Release Notes
+            run: |
+              RELEASE_DATE=$(date '+%Y-%m-%d')
+    
+    
+    
+    
+    
+              echo -e "## Release ${NEW_VERSION} - ${RELEASE_DATE}\n" > release_notes.md
+    
+    
+    
+    
+    
+    
+              # Initialize categories for each type of change
+    
+    
+    
+    
+              FEATURE_COMMENTS=""
+    
+    
+    
+    
+              BUG_COMMENTS=""
+    
+    
+    
+    
+              OTHER_COMMENTS=""
+    
+    
+    
+    
+              MAINTENANCE_COMMENTS=""
+    
+    
+    
+    
+              MAJOR_COMMENTS=""
+    
+    
+    
+              KNOW_ISSUE_COMMENTS=""
+    
+    
+    
+    
+    
+              # Define keywords for each category
+    
+    
+    
+    
+              FEATURE_KEYWORDS=("feature" "feat" "enhancement" "minor")
+    
+    
+    
+    
+              BUG_KEYWORDS=("bug" "bugfix" "defect" "error" "patch" )
+    
+    
+    
+    
+              OTHER_KEYWORDS=("other" "document" "docs" "update" "readme" "comments")
+    
+    
+    
+    
+              MAINTENANCE_KEYWORDS=("chore" "refactor" "maintenance" "dependencies" "cleanup" "deprecate")
+    
+    
+    
+    
+              MAJOR_KEYWORDS=("major" "stable" "breaking change")
+    
+    
+    
+              KNOW_ISSUE_KEYWORDS=("know issue" "known issue" "issue" "known problems")
+    
+    
+    
+    
+              # Loop through each line in the PR body and categorize based on the presence of keywords
+    
+    
+    
+    
+              while IFS= read -r line; do
+                
+                # Check for major-related changes
+                for keyword in "${MAJOR_KEYWORDS[@]}"; do
+                  if echo "$line" | grep -i "$keyword" > /dev/null; then
+                    MAJOR_COMMENTS+="- $line\n"
+                    break # Exit all loops for this line once categorized as major
+                  fi
+                done
+                # Check if the line contains any feature-related keyword (case-insensitive)
+                for keyword in "${FEATURE_KEYWORDS[@]}"; do
+                  if echo "$line" | grep -i "$keyword" > /dev/null; then
+                    FEATURE_COMMENTS+="- $line\n"
+                    break # Exit the loop once a match is found
+                  fi
+                done
+    
+                # Check if the line contains any bug-related keyword (case-insensitive)
+                for keyword in "${BUG_KEYWORDS[@]}"; do
+                  if echo "$line" | grep -i "$keyword" > /dev/null; then
+                    BUG_COMMENTS+="- $line\n"
+                    break # Exit the loop once a match is found
+                  fi
+                done
+    
+                # Check if the line contains any other-related keyword (case-insensitive)
+                for keyword in "${OTHER_KEYWORDS[@]}"; do
+                  if echo "$line" | grep -i "$keyword" > /dev/null; then
+                    OTHER_COMMENTS+="- $line\n"
+                    break # Exit the loop once a match is found
+                  fi
+                done
+    
+                # Check if the line contains any maintenance-related keyword (case-insensitive)
+                for keyword in "${MAINTENANCE_KEYWORDS[@]}"; do
+                  if echo "$line" | grep -i "$keyword" > /dev/null; then
+                    MAINTENANCE_COMMENTS+="- $line\n"
+                    break # Exit the loop once a match is found
+                  fi
+                done
+    
+                # Check for known issues
+                for keyword in "${KNOW_ISSUE_KEYWORDS[@]}"; do
+                  if echo "$line" | grep -i "$keyword" > /dev/null; then
+                    KNOW_ISSUE_COMMENTS+="- $line\n"
+                    break
+                  fi
+                done
+              done <<< "$PR_BODY"
+    
+    
+    
+    
+    
+              # Add categorized comments to the release notes
+    
+    
+    
+    
+              if [ -n "$FEATURE_COMMENTS" ]; then
+                echo -e "### Feature:\n$FEATURE_COMMENTS" >> release_notes.md
+              fi
+    
+    
+    
+    
+              if [ -n "$BUG_COMMENTS" ]; then
+                echo -e "\n### Bug Fixes:\n$BUG_COMMENTS" >> release_notes.md
+              fi
+    
+    
+    
+    
+              if [ -n "$OTHER_COMMENTS" ]; then
+                echo -e "\n### Other Changes:\n$OTHER_COMMENTS" >> release_notes.md
+              fi
+    
+    
+    
+    
+              if [ -n "$MAINTENANCE_COMMENTS" ]; then
+                echo -e "\n### Maintenance:\n$MAINTENANCE_COMMENTS" >> release_notes.md
+              fi 
+    
+    
+    
+              if [ -n "$MAJOR_COMMENTS" ]; then
+                echo -e "\n### Major Changes:\n$MAJOR_COMMENTS" >> release_notes.md
+              fi
+    
+    
+              if [ -n "$KNOW_ISSUE_COMMENTS" ]; then
+               echo -e "\n### Known Issues:\n$KNOW_ISSUE_COMMENTS" >> release_notes.md
+              fi
+          - name: Debug Token Access
+            run: echo $GH_TOKEN
+              env:
+                GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          - name: Create GitHub Release
+            run: |
+              gh release create "$NEW_VERSION" release_notes.md \
+                --title "Release $NEW_VERSION" \
+                --notes-file release_notes.md
+            env:
+              GH_TOKEN: ${{ secrets.GH_TOKEN }}
+    
