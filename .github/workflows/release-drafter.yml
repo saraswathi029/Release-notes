@@ -288,8 +288,8 @@
               fi
           - name: Debug Token Access
             run: echo $GH_TOKEN
-              env:
-                GH_TOKEN: ${{ secrets.GH_TOKEN }}
+            env:
+              GH_TOKEN: ${{ secrets.GH_TOKEN }}
           - name: Create GitHub Release
             run: |
               gh release create "$NEW_VERSION" release_notes.md \
