@@ -168,12 +168,12 @@
     
     
     
-              OTHER_KEYWORDS=("other" "document" "docs" "update" "readme" "comments")
+              OTHER_KEYWORDS=("docs" "update" "readme" "comments")
     
     
     
     
-              MAINTENANCE_KEYWORDS=("chore" "refactor" "maintenance" "dependencies" "cleanup" "deprecate")
+              MAINTENANCE_KEYWORDS=("chore" "refactor" "maintenance" "dependencies" "cleanup")
     
     
     
